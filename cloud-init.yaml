@@ -1,0 +1,7 @@
+#cloud-config
+users:
+- name: retpolanne
+  gecos: Anne Isabelle Macedo
+  shell: /bin/bash
+  groups: users,admin,docker
+  sudo: ALL=(ALL) NOPASSWD:ALL
