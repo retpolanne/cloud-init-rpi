@@ -5,3 +5,13 @@ users:
   shell: /bin/bash
   groups: users,admin,docker
   sudo: ALL=(ALL) NOPASSWD:ALL
+
+cloud_final_modules:
+- rightscale_userdata
+- scripts-per-once
+- scripts-per-boot
+- scripts-per-instance
+- [scripts-user, always]
+- keys-to-console
+- phone-home
+- final-message
