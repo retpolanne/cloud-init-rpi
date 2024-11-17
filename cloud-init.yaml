@@ -1,17 +1,111 @@
 #cloud-config
+## template: jinja
+hostname: applecider
+
+create_hostname_file: true
+
+package_update: true
+packages:
+- avahi-daemon
+- libnss-mdns
+- apt-transport-https
+- ca-certificates
+- curl
+- wget
+- gnupg-agent
+- software-properties-common
+- apparmor
+- jq
+- wget
+- curl
+- udisks2
+- libglib2.0-bin
+- network-manager
+- dbus
+- lsb-release
+- systemd-journal-remote
+
 users:
 - name: retpolanne
   gecos: Anne Isabelle Macedo
   shell: /bin/bash
   groups: users,admin,docker
   sudo: ALL=(ALL) NOPASSWD:ALL
+  ssh_authorized_keys: [ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGvPQEWeT0rHIdsIYAgS59cCjaB+9A3gAPQxFLKz3frx]
 
+disable_root: true
+
+runcmd:
+- curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
+- add-apt-repository "deb [arch=$(dpkg --print-architecture)] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+- apt-get update -y
+- apt-get install -y docker-ce docker-ce-cli containerd.io
+- systemctl start docker
+- systemctl enable docker
+- cd /usr/local/src && wget https://github.com/home-assistant/os-agent/releases/download/1.6.0/os-agent_1.6.0_linux_aarch64.deb
+- cd /usr/local/src && wget https://github.com/home-assistant/supervised-installer/releases/latest/download/homeassistant-supervised.deb
+
+phone_home:
+  post: [hostname, fqdn]
+  tries: 5
+  url: http://buysomeapples.local:8080/
+
+final_message: |
+  change the world
+  my final message
+  goodbye
+
+# Ref https://cloudinit.readthedocs.io/en/latest/reference/base_config_reference.html
+# The modules that run in the 'init' stage
+cloud_init_modules:
+- migrator
+- seed_random
+- bootcmd
+- write-files
+- growpart
+- resizefs
+- disk_setup
+- mounts
+- set_hostname
+- update_hostname
+- update_etc_hosts
+- ca-certs
+- rsyslog
+- users-groups
+- ssh
+- [package-update-upgrade-install, always]
+
+# The modules that run in the 'config' stage
+cloud_config_modules:
+# Emit the cloud config ready event
+# this can be used by upstart jobs for 'start on cloud-config'.
+- emit_upstart
+- ssh-import-id
+- set-passwords
+- grub-dpkg
+- apt-pipelining
+- apt-configure
+- ntp
+- timezone
+- disable-ec2-metadata
+- byobu
+- runcmd
+
+# The modules that run in the 'final' stage
 cloud_final_modules:
+- fan
+- puppet
+- chef
+- salt-minion
+- mcollective
 - rightscale_userdata
+- scripts-vendor
 - scripts-per-once
 - scripts-per-boot
 - scripts-per-instance
 - [scripts-user, always]
+- ssh-authkey-fingerprints
 - keys-to-console
 - phone-home
 - final-message
+- power-state-change
