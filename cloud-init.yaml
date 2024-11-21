@@ -20,10 +20,8 @@ packages:
 - curl
 - udisks2
 - libglib2.0-bin
-- network-manager
 - dbus
 - lsb-release
-- systemd-journal-remote
 
 users:
 - name: retpolanne
@@ -42,8 +40,10 @@ runcmd:
 - apt-get install -y docker-ce docker-ce-cli containerd.io
 - systemctl start docker
 - systemctl enable docker
+- apt install -y systemd-journal-remote network-manager
 - cd /usr/local/src && wget https://github.com/home-assistant/os-agent/releases/download/1.6.0/os-agent_1.6.0_linux_aarch64.deb
 - cd /usr/local/src && wget https://github.com/home-assistant/supervised-installer/releases/latest/download/homeassistant-supervised.deb
+- cd /usr/local/src && dpkg -i os-agent_1.6.0_linux_aarch64.deb && dpkg -i homeassistant-supervised.deb
 
 phone_home:
   post: [hostname, fqdn]
@@ -73,7 +73,6 @@ cloud_init_modules:
 - rsyslog
 - users-groups
 - ssh
-- [package-update-upgrade-install, always]
 
 # The modules that run in the 'config' stage
 cloud_config_modules:
@@ -93,6 +92,7 @@ cloud_config_modules:
 
 # The modules that run in the 'final' stage
 cloud_final_modules:
+- [package-update-upgrade-install, always]
 - fan
 - puppet
 - chef

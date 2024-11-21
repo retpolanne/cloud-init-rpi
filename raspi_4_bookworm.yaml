@@ -40,24 +40,37 @@ steps:
 
   - unpack-rootfs: tag-root
 
-  - debootstrap: bullseye
+  - debootstrap: bookworm
     require_empty_target: false
     mirror: http://deb.debian.org/debian
     target: tag-root
     arch: arm64
     components:
       - main
+      - non-free-firmware
       - non-free
+    unless: rootfs_unpacked
+
+  - apt: install
+    packages:
+      - curl
+    tag: tag-root
+    unless: rootfs_unpacked
+
+  - chroot: tag-root
+    shell: |
+      curl -fsSL http://archive.raspberrypi.org/debian/raspberrypi.gpg.key | tee /usr/share/keyrings/raspberrypi.gpg.key
     unless: rootfs_unpacked
 
   - create-file: /etc/apt/sources.list
     contents: |+
-      deb http://deb.debian.org/debian bullseye main non-free
-      deb http://deb.debian.org/debian bullseye-updates main non-free
-      deb http://security.debian.org/debian-security bullseye-security main non-free
+      deb http://deb.debian.org/debian bookworm main non-free-firmware non-free
+      deb http://deb.debian.org/debian bookworm-updates main non-free-firmware non-free
+      deb http://security.debian.org/debian-security bookworm-security main non-free-firmware non-free
+      deb [arch=arm64 signed-by=/usr/share/keyrings/raspberrypi.gpg.key] http://archive.raspberrypi.org/debian bookworm main
       # Backports are _not_ enabled by default.
       # Enable them by uncommenting the following line:
-      # deb http://deb.debian.org/debian bullseye-backports main non-free
+      # deb http://deb.debian.org/debian bookworm-backports main non-free-firmware
 
     unless: rootfs_unpacked
 
@@ -77,14 +90,17 @@ steps:
       - dosfstools
       - iw
       - parted
-      - ssh
+      - systemd-resolved
+      - openssh-server
       - wpasupplicant
       - systemd-timesyncd
       - linux-image-arm64
-      - raspi-firmware
       - firmware-brcm80211
       - bluez-firmware
       - cloud-init
+      - libnss-mdns
+      - raspi-firmware
+      - usbutils
     tag: tag-root
     unless: rootfs_unpacked
 
@@ -92,7 +108,7 @@ steps:
     unless: rootfs_unpacked
 
   - shell: |
-      echo "retpolanne_rpi_4-$(date +%Y%m%d)" > "${ROOT?}/etc/hostname"
+      echo "rpi_4-$(date +%Y%m%d)" > "${ROOT?}/etc/hostname"
 
       # Allow root logins locally with no password
       sed -i 's,root:[^:]*:,root::,' "${ROOT?}/etc/shadow"
@@ -138,20 +154,37 @@ steps:
   # the partition labeled raspiroot instead of forcing it to mmcblk0p2.
   # Also insert the serial console right before the root= parameter.
   #
-  # WARN: it installs my (retpolanne) cloud-init. If you don't want me
-  # controlling your device, change this.
-  #
   # These changes will be overwritten after the hardware is probed
   # after dpkg reconfigures raspi-firmware (upon first boot), so make
   # sure we don't lose label-based booting.
   - chroot: tag-root
     shell: |
-      echo "cloud-config-url=http://Annes-MacBook-Pro.local:8080/cloud-init.yaml" >> /etc/default/raspi-extra-cmdline
-      sed -i 's/root=/console=ttyS1,115200 root=/' /boot/firmware/cmdline.txt
-      sed -i 's#root=/dev/mmcblk0p2#root=LABEL=RASPIROOT#' /boot/firmware/cmdline.txt
-      sed -i 's/^#ROOTPART=.*/ROOTPART=LABEL=RASPIROOT/' /etc/default/raspi*-firmware
+      cat <<EOF> /etc/systemd/system/retpolanne.service
+      [Unit]
+      Description=retpolanne's debug service
 
-      sed -i 's/cma=64M //' /boot/firmware/cmdline.txt
+      [Service]
+      ExecStart=/bin/bash -c "lsusb"
+      StandardOutput=journal+console
+      StandardError=journal+console
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+      systemctl enable retpolanne.service
+      systemctl enable serial-getty@ttyAMA1
+
+      echo "cloud-config-url=http://buysomeapples.local:8080/cloud-init.yaml" >> /etc/default/raspi-extra-cmdline
+      #echo "console=ttyS1,115200" >> /etc/default/raspi-extra-cmdline
+      #echo "console=ttyAMA0" >> /etc/default/raspi-extra-cmdline
+      #echo "enable_uart=1" >> /boot/firmware/config.txt
+#      # This is needed for the first boot only, as it will get overwritten
+#      sed -i 's/root=/cloud-config-url=http:\/\/buysomeapples.local:8080\/cloud-init.yaml root=/' /boot/firmware/cmdline.txt
+#      sed -i 's/root=/console=ttyS1,115200 root=/' /boot/firmware/cmdline.txt
+#      sed -i 's#root=/dev/mmcblk0p2#root=LABEL=RASPIROOT#' /boot/firmware/cmdline.txt
+#      sed -i 's/^#ROOTPART=.*/ROOTPART=LABEL=RASPIROOT/' /etc/default/raspi*-firmware
+#
+#      sed -i 's/cma=64M //' /boot/firmware/cmdline.txt
 
   # TODO(https://github.com/larswirzenius/vmdb2/issues/24): remove once vmdb
   # clears /etc/resolv.conf on its own.
@@ -178,4 +211,4 @@ steps:
   # Create /etc/raspi-image-id to know, from what commit the image was built
   - chroot: tag-root
     shell: |
-      echo "image based on revision: ff7fdbf (Switch from qemu-debootstrap to debootstrap., 2024-01-01) and build on 2024-11-16 19:31 (UTC)" > "/etc/raspi-image-id"
+      echo "image based on revision: ff7fdbf (Switch from qemu-debootstrap to debootstrap., 2024-01-01) and build on 2024-11-19 02:28 (UTC)" > "/etc/raspi-image-id"
